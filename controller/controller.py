@@ -178,7 +178,7 @@ async def add_random_product(session: aiohttp.ClientSession, token: str):
     for attempt in range(3):
         try:
             async with session.post(
-                f"{CATALOG_SERVICE_URL}/add_product",
+                f"{CATALOG_SERVICE_URL}/api/v1/add_product",
                 json=payload,
                 headers=headers,
                 timeout=10
@@ -221,9 +221,9 @@ async def simulate_user_interaction(session: aiohttp.ClientSession, user: Dict):
             return
 
     # Add controlled error generation (15% chance of errors for testing)
-    if random.random() < 0.15:
-        await generate_test_errors(session, token)
-        return
+    # if random.random() < 0.15:
+    #     await generate_test_errors(session, token)
+    #     return
     actions = [
         lambda: place_order(session, token, random.choice(PRODUCTS)),
         lambda: view_orders(session, token),
