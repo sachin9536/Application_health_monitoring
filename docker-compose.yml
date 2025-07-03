@@ -106,6 +106,7 @@ services:
       - "8006:8006" # Metrics
     environment:
       - MONGO_URI=mongodb://admin:secret@mongodb:27017
+      - JWT_SECRET=mysecretkey
     networks:
       - private_net
     healthcheck:
@@ -162,6 +163,12 @@ services:
     networks:
       - private_net
     environment:
+      - GROQ_API_KEY=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
+      - GROQ_MODEL=llama3-8b-8192
+      - PROMETHEUS_URL=http://prometheus:9090
+      - SENDGRID_API_KEY=SG.LPwg5gtISNa6774eaF_wrg.
+      - ALERT_EMAIL_FROM=sachinchaudhary8991@gmail.com
+      - ALERT_EMAIL_TO=sachinchoudharyxyz9@gmail.com
     volumes:
       - ./logs:/app/logs
 
