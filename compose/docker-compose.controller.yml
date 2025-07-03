@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  controller:
+    build:
+      context: ..
+      dockerfile: Dockerfile.controller
+    container_name: controller
+    depends_on:
+      auth_service:
+        condition: service_healthy
+      order_service:
+        condition: service_healthy
+      catalog_service:
+        condition: service_healthy
+    networks:
+      - private_net
+    volumes:
+      - ../logs:/app/logs
+
+networks:
+  private_net:
+    external: true

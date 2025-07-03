@@ -1,0 +1,78 @@
+version: "3.9"
+
+services:
+  auth_service:
+    build:
+      context: ..
+      dockerfile: services/auth_service/Dockerfile
+    container_name: auth_service
+    depends_on:
+      - mongodb
+    ports:
+      - "8001:8000"
+      - "8002:8002"
+    environment:
+      - MONGO_URI=mongodb://admin:secret@mongodb:27017
+      - JWT_SECRET=mysecretkey
+    networks:
+      - private_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ../logs:/app/logs
+
+  order_service:
+    build:
+      context: ..
+      dockerfile: services/order_service/Dockerfile
+    container_name: order_service
+    depends_on:
+      - mongodb
+    ports:
+      - "8003:8000"
+      - "8004:8004"
+    environment:
+      - MONGO_URI=mongodb://admin:secret@mongodb:27017
+      - JWT_SECRET=mysecretkey
+    networks:
+      - private_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ../logs:/app/logs
+
+  catalog_service:
+    build:
+      context: ..
+      dockerfile: services/catalog_service/Dockerfile
+    container_name: catalog_service
+    depends_on:
+      - mongodb
+    ports:
+      - "8005:8000"
+      - "8006:8006"
+    environment:
+      - MONGO_URI=mongodb://admin:secret@mongodb:27017
+      - JWT_SECRET=mysecretkey
+    networks:
+      - private_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ../logs:/app/logs
+
+networks:
+  private_net:
+    external: true
