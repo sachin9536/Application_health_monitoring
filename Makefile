@@ -9,6 +9,7 @@ COMPOSE_FILES = \
 
 # Default target
 up:
+	docker compose $(COMPOSE_FILES) down
 	docker compose $(COMPOSE_FILES) up --build
 
 down:

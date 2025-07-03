@@ -4,7 +4,7 @@ services:
   controller:
     build:
       context: ..
-      dockerfile: Dockerfile.controller
+      dockerfile: controller/Dockerfile.controller
     container_name: controller
     depends_on:
       auth_service:
@@ -20,4 +20,4 @@ services:
 
 networks:
   private_net:
-    external: true
+    driver: bridge

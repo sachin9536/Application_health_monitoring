@@ -7,7 +7,7 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ../monitoring/prometheus:/etc/prometheus
     depends_on:
       - auth_service
       - order_service
@@ -18,7 +18,7 @@ services:
   monitoring_engine:
     build:
       context: ..
-      dockerfile: Dockerfile.monitoring
+      dockerfile: monitoring/Dockerfile.monitoring
     container_name: monitoring_engine
     ports:
       - "8000:8000"
@@ -38,4 +38,4 @@ services:
 
 networks:
   private_net:
-    external: true
+    driver: bridge

@@ -164,15 +164,62 @@ async def view_product(session: aiohttp.ClientSession, token: str, product_name:
                 return
             await asyncio.sleep(1)
 
+async def add_random_product(session: aiohttp.ClientSession, token: str):
+    """
+    Create a random product in the catalog service.
+    """
+    headers = {"Authorization": f"Bearer {token}"}
+    payload = {
+        "name": f"Product_{random.randint(1000, 9999)}",
+        "description": "Randomly generated product for testing.",
+        "stock": random.randint(10, 100)
+    }
+
+    for attempt in range(3):
+        try:
+            async with session.post(
+                f"{CATALOG_SERVICE_URL}/add_product",
+                json=payload,
+                headers=headers,
+                timeout=10
+            ) as resp:
+                if resp.status in [200, 201]:
+                    data = await resp.json()
+                    product_id = data.get("product_id")
+                    log_json("INFO", f"Created product: {payload['name']}", product_id=product_id)
+                    return {
+                        "_id": product_id,
+                        "name": payload["name"],
+                        "description": payload["description"],
+                        "stock": payload["stock"]
+                    }
+                else:
+                    log_json("ERROR", f"Failed to add product: {resp.status} | {await resp.text()}")
+        except Exception as e:
+            if attempt == 2:
+                log_json("ERROR", f"Exception during add_random_product after 3 attempts", error=str(e))
+                return None
+            await asyncio.sleep(1)
+
 async def simulate_user_interaction(session: aiohttp.ClientSession, user: Dict):
     token = await register_user(session, user) if random.choice([True, False]) else await signin_user(session, user)
     if not token:
         return
     if not PRODUCTS:
         await fetch_products(session, token)
+
+    if not PRODUCTS:
+        log_json("INFO", "No products found. Adding random products...")
+        new_products = []
+        for _ in range(5):
+            product = await add_random_product(session, token)
+            if product:
+                new_products.append(product)
+        PRODUCTS.extend(new_products)
         if not PRODUCTS:
-            log_json("ERROR", "No products available for testing.")
+            log_json("ERROR", "Still no products after attempting to add. Exiting this user interaction.")
             return
+
     # Add controlled error generation (15% chance of errors for testing)
     if random.random() < 0.15:
         await generate_test_errors(session, token)

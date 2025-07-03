@@ -6,11 +6,11 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 # Copy requirements and install dependencies
-COPY requirements.txt .
+COPY monitoring/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the monitoring engine
-COPY monitoring_engine.py .
+COPY monitoring/monitoring_engine.py .
 
 # Create logs directory
 RUN mkdir -p /app/logs

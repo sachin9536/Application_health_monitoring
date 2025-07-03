@@ -75,4 +75,4 @@ services:
 
 networks:
   private_net:
-    external: true
+    driver: bridge
