@@ -17,7 +17,7 @@ import json
 router = APIRouter()
 
 # DB Setup
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+MONGO_URI = os.getenv("MONGO_URI")
 client = AsyncIOMotorClient(MONGO_URI)
 db = client.order_service
 orders_collection = db.orders
@@ -53,7 +53,7 @@ async def create_order(
         catalog_start = time.time()
         async with httpx.AsyncClient() as client:
             resp = await client.get(
-                f"{CATALOG_SERVICE_URL}/product_by_id",
+                f"{CATALOG_SERVICE_URL}/api/v1/product_by_id",
                 params={"id": data.item_id},
                 headers=headers
             )
@@ -176,7 +176,7 @@ async def create_order(
     try:
         stock_start = time.time()
         async with httpx.AsyncClient() as client:
-            await client.post(f"{CATALOG_SERVICE_URL}/update_stock", json={
+            await client.post(f"{CATALOG_SERVICE_URL}/api/v1/update_stock", json={
                 "product_id": data.item_id,
                 "quantity": data.quantity
             })

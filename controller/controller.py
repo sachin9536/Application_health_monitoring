@@ -7,7 +7,7 @@ import platform
 import logging
 import json
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 # Create logs directory if it doesn't exist
 os.makedirs("logs", exist_ok=True)
@@ -41,6 +41,9 @@ USERS = [
 
 # Cached product list to avoid hardcoding
 PRODUCTS: List[Dict] = []
+
+# Use absolute import for seed_catalog
+from seed_catalog import seed_catalog_with_products
 
 async def wait_for_service(session: aiohttp.ClientSession, service_url: str, service_name: str, max_retries: int = 30):
     for attempt in range(max_retries):
@@ -89,7 +92,7 @@ async def fetch_products(session: aiohttp.ClientSession, token: str):
                 return
             await asyncio.sleep(1)
 
-async def register_user(session: aiohttp.ClientSession, user: Dict) -> str:
+async def register_user(session: aiohttp.ClientSession, user: Dict) -> Optional[str]:
     payload = {"email": user["email"], "password": user["password"]}
     for attempt in range(3):
         try:
@@ -103,8 +106,9 @@ async def register_user(session: aiohttp.ClientSession, user: Dict) -> str:
                 log_json("ERROR", f"Failed to register user {user['email']} after 3 attempts", error=str(e))
                 return None
             await asyncio.sleep(1)
+    return None
 
-async def signin_user(session: aiohttp.ClientSession, user: Dict) -> str:
+async def signin_user(session: aiohttp.ClientSession, user: Dict) -> Optional[str]:
     payload = {"email": user["email"], "password": user["password"]}
     for attempt in range(3):
         try:
@@ -121,6 +125,7 @@ async def signin_user(session: aiohttp.ClientSession, user: Dict) -> str:
                 log_json("ERROR", f"Failed to signin user {user['email']} after 3 attempts", error=str(e))
                 return None
             await asyncio.sleep(1)
+    return None
 
 async def place_order(session: aiohttp.ClientSession, token: str, product: Dict):
     headers = {"Authorization": f"Bearer {token}"}
@@ -164,66 +169,59 @@ async def view_product(session: aiohttp.ClientSession, token: str, product_name:
                 return
             await asyncio.sleep(1)
 
-async def add_random_product(session: aiohttp.ClientSession, token: str):
+async def check_catalog_service_health(session: aiohttp.ClientSession) -> bool:
     """
-    Create a random product in the catalog service.
+    Check if the catalog service is healthy and database is connected.
     """
-    headers = {"Authorization": f"Bearer {token}"}
-    payload = {
-        "name": f"Product_{random.randint(1000, 9999)}",
-        "description": "Randomly generated product for testing.",
-        "stock": random.randint(10, 100)
-    }
+    try:
+        async with session.get(f"{CATALOG_SERVICE_URL}/health", timeout=5) as resp:
+            if resp.status == 200:
+                health_data = await resp.json()
+                log_json("INFO", f"Catalog service health: {health_data}")
+                return True
+            else:
+                log_json("ERROR", f"Catalog service health check failed: {resp.status}")
+                return False
+    except Exception as e:
+        log_json("ERROR", f"Catalog service health check failed", error=str(e))
+        return False
 
-    for attempt in range(3):
-        try:
-            async with session.post(
-                f"{CATALOG_SERVICE_URL}/api/v1/add_product",
-                json=payload,
-                headers=headers,
-                timeout=10
-            ) as resp:
-                if resp.status in [200, 201]:
-                    data = await resp.json()
-                    product_id = data.get("product_id")
-                    log_json("INFO", f"Created product: {payload['name']}", product_id=product_id)
-                    return {
-                        "_id": product_id,
-                        "name": payload["name"],
-                        "description": payload["description"],
-                        "stock": payload["stock"]
-                    }
-                else:
-                    log_json("ERROR", f"Failed to add product: {resp.status} | {await resp.text()}")
-        except Exception as e:
-            if attempt == 2:
-                log_json("ERROR", f"Exception during add_random_product after 3 attempts", error=str(e))
-                return None
-            await asyncio.sleep(1)
+async def test_catalog_service_connectivity(session: aiohttp.ClientSession, token: str) -> bool:
+    """
+    Test if the catalog service is accessible and the token is valid.
+    """
+    # First check general health
+    if not await check_catalog_service_health(session):
+        log_json("ERROR", "Catalog service health check failed")
+        return False
+    
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        async with session.get(f"{CATALOG_SERVICE_URL}/ping", timeout=5) as resp:
+            if resp.status == 200:
+                log_json("INFO", "Catalog service is accessible")
+                return True
+            else:
+                log_json("ERROR", f"Catalog service ping failed: {resp.status}")
+                return False
+    except Exception as e:
+        log_json("ERROR", f"Catalog service connectivity test failed", error=str(e))
+        return False
 
 async def simulate_user_interaction(session: aiohttp.ClientSession, user: Dict):
     token = await register_user(session, user) if random.choice([True, False]) else await signin_user(session, user)
     if not token:
+        log_json("ERROR", f"Failed to get valid token for user {user['email']}")
         return
+    
+    # Fetch products if not already available
     if not PRODUCTS:
         await fetch_products(session, token)
-
-    if not PRODUCTS:
-        log_json("INFO", "No products found. Adding random products...")
-        new_products = []
-        for _ in range(5):
-            product = await add_random_product(session, token)
-            if product:
-                new_products.append(product)
-        PRODUCTS.extend(new_products)
         if not PRODUCTS:
-            log_json("ERROR", "Still no products after attempting to add. Exiting this user interaction.")
+            log_json("WARNING", "No products available for user interaction")
             return
 
-    # Add controlled error generation (15% chance of errors for testing)
-    # if random.random() < 0.15:
-    #     await generate_test_errors(session, token)
-    #     return
+    # Perform random user actions
     actions = [
         lambda: place_order(session, token, random.choice(PRODUCTS)),
         lambda: view_orders(session, token),
@@ -304,6 +302,24 @@ async def test_invalid_payload(session: aiohttp.ClientSession, token: str):
     except Exception as e:
         log_json("ERROR", f"Invalid payload test error", error=str(e))
 
+async def refresh_products_list(session: aiohttp.ClientSession, token: str):
+    """
+    Refresh the global products list by fetching from catalog service.
+    """
+    global PRODUCTS
+    try:
+        headers = {"Authorization": f"Bearer {token}"}
+        async with session.get(f"{CATALOG_SERVICE_URL}/api/v1/all_products", headers=headers, timeout=10) as resp:
+            if resp.status == 200:
+                new_products = await resp.json()
+                if new_products:
+                    PRODUCTS = new_products
+                    log_json("INFO", f"Refreshed products list: {len(PRODUCTS)} products available")
+                    return True
+    except Exception as e:
+        log_json("ERROR", f"Failed to refresh products list", error=str(e))
+    return False
+
 async def main():
     if not await wait_for_all_services():
         log_json("ERROR", "Failed to start - services not ready")
@@ -311,8 +327,28 @@ async def main():
     request_rate = 10  # initial RPM
     increase_interval = 300
     start_time = time.time()
+    last_refresh_time = 0
+    refresh_interval = 60  # Refresh products list every 60 seconds
+
     async with aiohttp.ClientSession() as session:
+        # Seed the catalog with products at startup
+        user = random.choice(USERS)
+        token = await register_user(session, user) if random.choice([True, False]) else await signin_user(session, user)
+        if token:
+            await seed_catalog_with_products(session, token)
+        else:
+            log_json("ERROR", "Failed to get token for seeding catalog")
+
         while True:
+            current_time = time.time()
+            # Refresh products list periodically
+            if current_time - last_refresh_time > refresh_interval:
+                user = random.choice(USERS)
+                token = await register_user(session, user) if random.choice([True, False]) else await signin_user(session, user)
+                if token:
+                    await refresh_products_list(session, token)
+                last_refresh_time = current_time
+            # Regular user interactions
             tasks = [simulate_user_interaction(session, random.choice(USERS)) for _ in range(request_rate)]
             await asyncio.gather(*tasks)
             if time.time() - start_time > increase_interval:

@@ -4,8 +4,8 @@
 COMPOSE_FILES = \
 	-f compose/docker-compose.shared.yml \
 	-f compose/docker-compose.services.yml \
-	-f compose/docker-compose.monitoring.yml \
-	-f compose/docker-compose.controller.yml
+	-f compose/docker-compose.controller.yml \
+	# -f compose/docker-compose.monitoring.yml \
 
 # Default target
 up:
